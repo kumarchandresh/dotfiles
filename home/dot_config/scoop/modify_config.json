@@ -1,0 +1,6 @@
+{{- /* chezmoi:modify-template */ -}}
+{{- $config := dict -}}
+{{- if .chezmoi.stdin -}}
+{{-   $config = fromJson .chezmoi.stdin -}}
+{{- end -}}
+{{- $config | setValueAtPath "scoop_branch" "develop" | setValueAtPath "aria2-warning-enabled" false | toPrettyJson -}}
