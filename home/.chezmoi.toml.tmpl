@@ -1,0 +1,26 @@
+{{- /* Defaults */ -}}
+{{- $shell := "" -}}
+{{- $shellArgs := list -}}
+{{- $osid := .chezmoi.os -}}
+{{- if hasKey .chezmoi.osRelease "id" -}}
+{{-     $osid = printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id -}}
+{{- end -}}
+
+{{- if eq .chezmoi.os "windows" -}}
+{{-     $shell = "pwsh" -}}
+{{-     $shellArgs = list "-NoLogo" -}}
+{{- else -}}
+{{-     $shell = "bash" -}}
+{{-     $shellArgs = list -}}
+{{- end -}}
+
+[data]
+    osid = {{ $osid | quote }}
+
+[cd]
+    command = {{ $shell | quote }}
+    args = [{{- $shellArgs | quoteList | join ", " -}}]
+
+[interpreters.ps1]
+    command = "pwsh"
+    args = ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass"]
