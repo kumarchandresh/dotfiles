@@ -144,3 +144,19 @@ if (Test-IsBucketInstalled private) {
     Write-Blue '* Install/update font: MonoLisa'
     Install-ScoopPackage 'private/MonoLisa'
 }
+
+# https://code.visualstudio.com
+Write-Blue '* Install/update Visual Studio Code'
+Install-ScoopPackage 'extras/vscode'
+# reg import "C:\Users\KumarChandresh\scoop\apps\vscode\current\install-context.reg"
+# reg import "C:\Users\KumarChandresh\scoop\apps\vscode\current\install-associations.reg"
+# reg import "C:\Users\KumarChandresh\scoop\apps\vscode\current\install-github-integration.reg"
+
+# https://cursor.com
+Write-Blue '* Install/update Cursor'
+Install-ScoopPackage 'extras/cursor'
+
+# https://antigravity.google
+Write-Blue '* Install/update Google Antigravity'
+Install-ScoopPackage 'extras/antigravity-ide'
+Install-ScoopPackage 'extras/antigravity'
