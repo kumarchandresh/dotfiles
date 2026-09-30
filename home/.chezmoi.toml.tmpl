@@ -5,6 +5,7 @@
 {{- if hasKey .chezmoi.osRelease "id" -}}
 {{-     $osid = printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id -}}
 {{- end -}}
+{{- $machineType := "unknown" -}}
 
 {{- if eq .chezmoi.os "windows" -}}
 {{-     $shell = "pwsh" -}}
@@ -14,8 +15,19 @@
 {{-     $shellArgs = list -}}
 {{- end -}}
 
+{{- if hasKey . "machineType" -}}
+{{-     $machineType = .machineType -}}
+{{- else if env "ChezmoiMachineType" -}}
+{{-     $machineType = env "ChezmoiMachineType" -}}
+{{- else if stdinIsATTY -}}
+{{-     $machineTypes := list "Personal" "Work-Deltek" "Work-Zealie" -}}
+{{-     $machineType = promptChoiceOnce . "machineType" "Select machine type" $machineTypes "" -}}
+{{- end -}}
+{{- $machineType = $machineType | lower -}}
+
 [data]
     osid = {{ $osid | quote }}
+    machineType = {{ $machineType | quote }}
 
 [cd]
     command = {{ $shell | quote }}

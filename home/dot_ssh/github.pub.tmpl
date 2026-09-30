@@ -1,1 +1,3 @@
-{{ (bitwarden "item" "ssh:github.com/me").sshKey.publicKey }}
+{{- if and (lookPath "bw") (eq .machineType "personal") -}}
+{{ (bitwarden "item" "ssh:github.com/personal").sshKey.publicKey }}
+{{- end -}}

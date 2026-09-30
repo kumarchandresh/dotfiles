@@ -1,5 +1,26 @@
+{{- $identityFile := "github" -}}
+{{- if (eq .machineType "work-deltek") -}}
+{{-     $identityFile = "github_deltek" -}}
+{{- else if (eq .machineType "work-zealie") -}}
+{{-     $identityFile = "github_zealie" -}}
+{{- end -}}
+
 Host github.com
     HostName github.com
     User git
-    IdentityFile {{ .chezmoi.homeDir }}/.ssh/github
+    IdentityFile {{ .chezmoi.homeDir }}/.ssh/{{ $identityFile }}
     IdentitiesOnly yes
+
+{{ if (eq .machineType "personal") -}}
+Host github-deltek
+    HostName github.com
+    User git
+    IdentityFile {{ .chezmoi.homeDir }}/.ssh/github_deltek
+    IdentitiesOnly yes
+
+Host github-zealie
+    HostName github.com
+    User git
+    IdentityFile {{ .chezmoi.homeDir }}/.ssh/github_zealie
+    IdentitiesOnly yes
+{{- end -}}

@@ -1,0 +1,3 @@
+{{- if and (lookPath "bw") (or (eq .machineType "personal") (eq .machineType "work-deltek")) -}}
+{{ (bitwarden "item" "ssh:github.com/deltek").sshKey.publicKey }}
+{{- end -}}

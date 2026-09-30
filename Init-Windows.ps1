@@ -130,7 +130,13 @@ if (-not $Bootstrapped) {
         [PSCustomObject]@{ Name = 'java' },
         [PSCustomObject]@{ Name = 'fonts'; Repo = 'https://github.com/kumarchandresh/scoop-fonts' }
     )
-    if ("$(ssh -T git@github.com 2>&1)".Contains("You've successfully authenticated")) {
+    
+    $machineType = chezmoi execute-template '{{ .machineType }}' 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        $machineType = "unknown"
+    }
+
+    if (($machineType -eq 'personal') -and ("$(ssh -T git@github.com 2>&1)".Contains("You've successfully authenticated"))) {
         $ScoopBuckets += [PSCustomObject]@{ Name = 'private'; Repo = 'git@github.com:kumarchandresh/scoop-private.git' }
     }
     $ScoopBuckets | ForEach-Object { $_ | Install-ScoopBucket }

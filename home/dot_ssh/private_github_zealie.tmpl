@@ -1,0 +1,3 @@
+{{- if and (lookPath "bw") (or (eq .machineType "personal") (eq .machineType "work-zealie")) -}}
+{{ (bitwarden "item" "ssh:github.com/zealie").sshKey.privateKey }}
+{{- end -}}
