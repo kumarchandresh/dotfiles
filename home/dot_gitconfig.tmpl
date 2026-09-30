@@ -1,5 +1,7 @@
 [user]
-	email = {{ (bitwardenFields "item" "login:github.com/me").email.value }}
+{{- if lookPath "bw" }}
+	email = {{ (bitwardenFields "item" "login:github.com/personal").email.value }}
+{{- end }}
 	name = Kumar Chandresh
 [core]
 	autocrlf = true

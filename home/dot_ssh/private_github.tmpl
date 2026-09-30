@@ -1,1 +1,3 @@
-{{ (bitwarden "item" "ssh:github.com/me").sshKey.privateKey }}
+{{- if lookPath "bw" -}}
+{{ (bitwarden "item" "ssh:github.com/personal").sshKey.privateKey }}
+{{- end -}}

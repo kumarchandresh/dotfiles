@@ -130,6 +130,7 @@ if (-not $Bootstrapped) {
         [PSCustomObject]@{ Name = 'java' },
         [PSCustomObject]@{ Name = 'fonts'; Repo = 'https://github.com/kumarchandresh/scoop-fonts' }
     )
+    
     if ("$(ssh -T git@github.com 2>&1)".Contains("You've successfully authenticated")) {
         $ScoopBuckets += [PSCustomObject]@{ Name = 'private'; Repo = 'git@github.com:kumarchandresh/scoop-private.git' }
     }
