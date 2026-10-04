@@ -1,13 +1,17 @@
 Import-Module "$PSScriptRoot/../Utils"
 
 function Unlock-Bitwarden {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param ()
+
+    if (-not (Test-IsCommandAvailable bw)) {
+        Write-Error 'Bitwarden CLI is not on PATH; aborted.' -Category NotInstalled
+        return 'Failed'
+    }
+
     :loop while ($true) {
         $retry = 'y'
-
-        if (-not (Test-IsCommandAvailable bw)) {
-            Write-Red 'Bitwarden CLI is not on PATH; aborted.'
-            break
-        }
 
         $bw = bw status | ConvertFrom-Json
         $exitCode = $LASTEXITCODE
@@ -26,7 +30,7 @@ function Unlock-Bitwarden {
             }
             'unlocked' {
                 Write-Green 'Bitwarden is already unlocked'
-                break :loop
+                return 'AlreadyUnlocked'
             }
             default {
                 throw "Uh, oh! What to do when status is '$status'?"
@@ -37,7 +41,7 @@ function Unlock-Bitwarden {
             Write-Green 'Bitwarden unlocked successfully'
             [System.Environment]::SetEnvironmentVariable('BW_SESSION', $sessionId, [System.EnvironmentVariableTarget]::Process)
             [System.Environment]::SetEnvironmentVariable('BW_SESSION', $sessionId, [System.EnvironmentVariableTarget]::User)
-            break
+            return 'Unlocked'
         }
         else {
             Write-Red 'Failed to unlock Bitwarden'
@@ -49,7 +53,7 @@ function Unlock-Bitwarden {
         }
 
         if ($retry -eq 'n') {
-            break
+            return 'Failed'
         }
     }
 }
