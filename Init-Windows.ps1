@@ -1,157 +1,186 @@
 [CmdletBinding()]
 param (
-    [Parameter()]
-    [ValidateSet(1, 2)]
-    [int]$Checkpoint = 1
+    [switch]$SelfExecuted
 )
 
-# Unicode in PowerShell - https://stackoverflow.com/a/49481797
+# Configure UTF-8 encoding across console streams and pipeline operations
 $PSDefaultParameterValues['*:Encoding'] = 'utf8'
 $OutputEncoding = [System.Console]::OutputEncoding = [System.Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
 Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/Utils"
-Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/Bitwarden"
-Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Helpers/Scoop"
+Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/Scoop"
 
-if (Test-IsProcessElevated) {
-    Write-Red 'Since typical Scoop installation is run from a non-admin PowerShell; this script cannot be executed from an elevated PowerShell session.'
+if ($PSEdition -eq 'Core') {
+    Import-Module -Force 'Microsoft.WinGet.Client'
+    Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/WinGet"
+    Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/Bitwarden"
+}
+
+if ((Test-IsProcessElevated) -and (-not $SelfExecuted)) {
+    Write-Red 'Cannot be executed from an elevated PowerShell session.'
     exit 1
 }
 
-if ($Checkpoint -eq 1) {
+if (($PSEdition -eq 'Core') -and (-not $SelfExecuted)) {
+    Write-Red 'Must be executed from Windows PowerShell (powershell.exe) so Scoop can install or update PowerShell Core (pwsh.exe).'
+    exit 1
+}
 
-    if ($PSEdition -eq 'Core') {
-        Write-Red 'Since Scoop uses PowerShell Core (pwsh.exe) internally, this script must be executed from Windows PowerShell (powershell.exe) so it can install/update the PowerShell Core.'
-        exit 1
-    }
+Restore-EnvPath
 
-    # https://github.com/ScoopInstaller/Scoop/wiki
-    Write-Blue '# Install/update scoop'
+#region Phase 1
+# ---------------------------------------------------------------------------
+# Bootstrap Scoop, PowerShell Core, and Core CLI Tools
+#
+# Bootstrap Scoop in user-space without elevation to acquire Git, PowerShell Core,
+# gsudo, winget-ps, chezmoi, and bitwarden-cli in a single batched operation.
+# Use Windows PowerShell 5.1 strictly as the temporary launchpad.
+# ---------------------------------------------------------------------------
+if ($PSEdition -ne 'Core') {
+
+    Write-Title ':: Bootstrap Scoop, PowerShell Core, and Core CLI Tools'
     if (-not (Test-IsCommandAvailable 'scoop')) {
         Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-        $FreshInstall = $true
     }
     else {
-        if ((scoop config scoop_branch) -ne 'develop') {
-            scoop config scoop_branch develop
+        if (Test-IsCommandAvailable 'git') {
+            scoop update
         }
-        scoop update
+        else {
+            Write-Yellow 'git is not available in PATH; skipping scoop update'
+        }
     }
 
-    # https://aria2.github.io
-    Write-Blue '# Install/update aria2'
-    Install-ScoopPackage 'main/aria2'
+    if ((scoop config scoop_branch) -ne 'develop') {
+        scoop config scoop_branch develop
+    }
 
-    if (scoop config aria2-warning-enabled) {
+    if ((scoop config aria2-warning-enabled) -ne $false) {
         scoop config aria2-warning-enabled false
     }
 
-    # https://www.7-zip.org
-    Write-Blue '# Install/update 7zip'
-    Install-ScoopPackage 'main/7zip'
-    # reg import "$HOME/scoop/apps/7zip/current/install-context.reg"
+    @(
+        'main/aria2'
+        'main/7zip'
+        'main/innounp'
+        'main/lessmsi'
+        'main/dark'
+        'main/pwsh'
+        'main/gsudo'
+        'main/winget-ps'
+        'main/chezmoi'
+        'main/bitwarden-cli'
+    ) | Install-ScoopPackage
 
-    # https://innounp.sourceforge.net
-    Write-Blue '# Install/update innounp'
-    Install-ScoopPackage 'main/innounp'
+    # Re-launch in PowerShell Core to continue execution
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File "$PSCommandPath" -SelfExecuted
+    exit $LASTEXITCODE
+}
+#endregion
 
-    # https://github.com/activescott/lessmsi
-    Write-Blue '# Install/update lessmsi'
-    Install-ScoopPackage 'main/lessmsi'
+#region Phase 2
+# ---------------------------------------------------------------------------
+# Provision System Dependencies (Elevated)
+#
+# Ensure WinGet availability, then elevate once via gsudo to install
+# machine-level dependencies in a separate elevated process.
+# ---------------------------------------------------------------------------
+if (-not (Test-IsProcessElevated)) {
 
-    # https://wixtoolset.org
-    Write-Blue '# Install/update dark'
-    Install-ScoopPackage 'main/dark'
-
-    # https://gitforwindows.org
-    Write-Blue '# Install/update git'
-    Install-ScoopPackage 'main/git'
-    # reg import "$HOME/scoop/apps/git/current/install-context.reg"
-
-    if ($null -ne $FreshInstall) {
-        Write-Text 'Switching Scoop to develop branch...'
-        if ((scoop config scoop_branch) -ne 'develop') {
-            scoop config scoop_branch develop
-        }
-        scoop update
-    }
-
-    # https://microsoft.com/PowerShell
-    Write-Blue '# Install/update PowerShell'
-    Install-ScoopPackage 'main/pwsh'
-    # reg import "$HOME/scoop/apps/pwsh/current/install-explorer-context.reg"
-    # reg import "$HOME/scoop/apps/pwsh/current/install-file-context.reg"
-
-
-    # https://github.com/bitwarden/clients
-    Write-Blue '# Install/update Bitwarden CLI'
-    Install-ScoopPackage 'main/bitwarden-cli'
-
+    Write-Title ':: Provision System Dependencies'
     try {
-        Write-Text 'Unlocking Bitwarden vault...'
-        Unlock-Bitwarden
-
-        # https://www.chezmoi.io
-        Write-Blue '# Install/update chezmoi'
-        Install-ScoopPackage 'main/chezmoi'
-
-        Write-Text 'Applying chezmoi changes...'
-        chezmoi git status *> $null
-        if ($LASTEXITCODE -ne 0) {
-            chezmoi init kumarchandresh --apply --force
-        }
-        else {
-            chezmoi update --force
-        }
-        if ($LASTEXITCODE -eq 0) {
-            Write-Green 'Done.'
-        }
+        Assert-WinGetPackageManager -Latest -ErrorAction Stop
     }
-    finally {
-        Lock-Bitwarden
+    catch {
+        Repair-WinGetPackageManager -Latest -Force
     }
 
-    Write-Blue '# Install/ensure scoop buckets'
-    $ScoopBuckets = @(
-        [PSCustomObject]@{ Name = 'main' },
-        [PSCustomObject]@{ Name = 'extras' },
-        [PSCustomObject]@{ Name = 'versions' },
-        [PSCustomObject]@{ Name = 'java' },
-        [PSCustomObject]@{ Name = 'fonts'; Repo = 'https://github.com/kumarchandresh/scoop-fonts' }
-    )
-    
-    if ("$(ssh -T git@github.com 2>&1)".Contains("You've successfully authenticated")) {
-        $ScoopBuckets += [PSCustomObject]@{ Name = 'private'; Repo = 'git@github.com:kumarchandresh/scoop-private.git' }
+    Write-Yellow 'Running as administrator; expect a UAC prompt...'
+    & gsudo --integrity High pwsh -NoProfile -ExecutionPolicy (Get-ExecutionPolicy) -File $PSCommandPath -SelfExecuted
+    if ($LASTEXITCODE -ne 0) {
+        Write-Red 'Elevated system setup failed.'
+        exit 1
     }
-    $ScoopBuckets | ForEach-Object { $_ | Install-ScoopBucket }
 
-    # https://github.com/microsoft/winget-cli/tree/master/src/PowerShell/Microsoft.WinGet.Client
-    Write-Blue '# Install/update WinGet PowerShell Module'
-    Install-ScoopPackage 'main/winget-ps'
+    Restore-EnvPath
+}
+else {
 
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File "$PSCommandPath" -Checkpoint (++$Checkpoint)
+    @(
+        'Microsoft.VCRedist.2015+.x64'
+        'Microsoft.VCRedist.2015+.x86'
+        'Git.Git'
+    ) | Install-WinGetPackage -Global
+
     exit 0
 }
+#endregion
 
-Import-Module -Force 'Microsoft.WinGet.Client'
-Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Helpers/WinGet"
+#region Phase 3
+# ---------------------------------------------------------------------------
+# Deploy Dotfiles and Secrets (Chezmoi & Bitwarden)
+#
+# Unlock Bitwarden to decrypt secrets and apply Chezmoi dotfiles.
+# Deploys personal configuration files and GitHub SSH keys required before
+# cloning private repositories. Git is guaranteed in PATH from Phase 1.
+# ---------------------------------------------------------------------------
+if (-not (Test-IsCommandAvailable 'git')) {
+    Write-Red 'git is not available in PATH; ensure Scoop bootstrap completed successfully.'
+    exit 1
+}
 
-# https://github.com/microsoft/winget-cli
-Write-Blue '# Install/update WinGet'
+Write-Title ':: Deploy Dotfiles and Secrets (Chezmoi & Bitwarden)'
+
 try {
-    Assert-WinGetPackageManager -ErrorAction Stop
-}
-catch {
-    Repair-WinGetPackageManager -Latest
-}
-Install-WinGetPackage -Id 'Microsoft.AppInstaller'
+    Unlock-Bitwarden
 
-# https://code.visualstudio.com
-Write-Blue '# Install/update Visual Studio Code'
-Install-WinGetPackage 'Microsoft.VisualStudioCode' -Config 'Microsoft.VSCode.inf'
-
-if (Test-IsBucketInstalled private) {
-    # https://www.monolisa.dev
-    Write-Blue '# Install/update font: MonoLisa'
-    Install-ScoopPackage 'private/MonoLisa'
+    chezmoi git status *> $null
+    if ($LASTEXITCODE -ne 0) {
+        chezmoi init kumarchandresh --apply --force
+    }
+    else {
+        chezmoi update --force
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Red 'Chezmoi failed to apply dotfiles.'
+        exit 1
+    }
 }
+finally {
+    Lock-Bitwarden
+}
+#endregion
+
+#region Phase 4
+# ---------------------------------------------------------------------------
+# Extend Package Sources and Install User Applications
+#
+# Complete bootstrapping. Leverage GitHub SSH keys deployed by Chezmoi to clone
+# the private Scoop bucket without credential friction. Configure all extended
+# buckets and install remaining user-space applications and fonts.
+# ---------------------------------------------------------------------------
+Write-Title ':: Extend Package Sources and Install User Applications'
+
+$ScoopBuckets = @(
+    [PSCustomObject]@{ Name = 'main' },
+    [PSCustomObject]@{ Name = 'extras' },
+    [PSCustomObject]@{ Name = 'versions' },
+    [PSCustomObject]@{ Name = 'java' },
+    [PSCustomObject]@{ Name = 'fonts'; Repo = 'https://github.com/kumarchandresh/scoop-fonts' }
+)
+
+if ("$(ssh -T -o StrictHostKeyChecking=accept-new git@github.com 2>&1)".Contains("You've successfully authenticated")) {
+    $ScoopBuckets += [PSCustomObject]@{ Name = 'private'; Repo = 'git@github.com:kumarchandresh/scoop-private.git' }
+}
+$ScoopBuckets | Install-ScoopBucket
+
+@(
+    'Microsoft.VisualStudioCode'
+) | Install-WinGetPackage
+
+if (Test-IsScoopBucketInstalled private) {
+    @(
+        'private/MonoLisa'
+    ) | Install-ScoopPackage
+}
+#endregion

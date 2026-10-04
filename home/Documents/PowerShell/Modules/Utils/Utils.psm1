@@ -1,3 +1,19 @@
+function Test-IsProcessElevated {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]$identity
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Restore-EnvPath {
+    # https://superuser.com/q/867728/1042970
+    # Windows is crazy; it prepends system path to user path; which results in
+    # system applications taking precedence over user applications.
+    ${env:Path} = @(
+        [Environment]::GetEnvironmentVariable('Path', 'User')
+        [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    ) -join ';'
+}
+
 function Write-ColorOutput {
     [CmdletBinding()]
     param (
@@ -40,6 +56,11 @@ function Write-ColorOutput {
     $Host.UI.RawUI.BackgroundColor = $prevBackgroundColor
 }
 
+function Write-Title {
+    Write-Output ''
+    Write-ColorOutput $args -ForegroundColor Cyan
+}
+
 function Write-Blue { Write-ColorOutput $args -ForegroundColor Blue }
 function Write-Cyan { Write-ColorOutput $args -ForegroundColor Cyan }
 function Write-Text { Write-ColorOutput $args -ForegroundColor Gray }
@@ -64,10 +85,4 @@ function Test-IsCommandAvailable {
     )
 
     [bool](Get-Command -Name $Command -ErrorAction SilentlyContinue)
-}
-
-function Test-IsProcessElevated {
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [Security.Principal.WindowsPrincipal]$identity
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
