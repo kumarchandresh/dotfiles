@@ -13,47 +13,50 @@ function Test-IsScoopPackageInstalled {
 function Install-ScoopPackage {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ValueFromPipeline, Position = 0)]
         [string]$Package,
         [Parameter()]
         [switch]$Global
     )
 
-    switch -Regex ($Package) {
-        # URL format: https://example.com/app.json@version
-        '^(?:https?://)?.+/([^/@]+)\.json((?:@).*)?$' {
-            $name = $Matches[1]
-            break
-        }
-        # Path format: C:/path/to/app.json@version
-        '^.+[\\/]([^\\/@]+)\.json(@.*)?$' {
-            $name = $Matches[1]
-            break
-        }
-        # Bucket format: bucket/app@version
-        '^[^/]+/([^@]+)(@.*)?$' {
-            $name = $Matches[1]
-            break
-        }
-        # Short format: app@version
-        '^([^@]+)(@.*)?$' {
-            $name = $Matches[1]
-            break
-        }
-        default {
-            $name = $Package
-            break
-        }
-    }
+    process {
 
-    $arguments = @(if (Test-IsScoopPackageInstalled $name) { 'update' } else { 'install' })
-    if ($Global) {
-        $arguments += '--global'
-    }
-    $arguments += $Package
+        switch -Regex ($Package) {
+            # URL format: https://example.com/app.json@version
+            '^(?:https?://)?.+/([^/@]+)\.json((?:@).*)?$' {
+                $name = $Matches[1]
+                break
+            }
+            # Path format: C:/path/to/app.json@version
+            '^.+[\\/]([^\\/@]+)\.json(@.*)?$' {
+                $name = $Matches[1]
+                break
+            }
+            # Bucket format: bucket/app@version
+            '^[^/]+/([^@]+)(@.*)?$' {
+                $name = $Matches[1]
+                break
+            }
+            # Short format: app@version
+            '^([^@]+)(@.*)?$' {
+                $name = $Matches[1]
+                break
+            }
+            default {
+                $name = $Package
+                break
+            }
+        }
 
-    Write-Muted "$([char]0x203A) scoop $($arguments -join ' ')"
-    & scoop @arguments
+        $arguments = @(if (Test-IsScoopPackageInstalled $name) { 'update' } else { 'install' })
+        if ($Global) {
+            $arguments += '--global'
+        }
+        $arguments += $Package
+
+        Write-Muted "$([char]0x203A) scoop $($arguments -join ' ')"
+        & scoop @arguments
+    }
 }
 
 function Test-IsBucketInstalled {
