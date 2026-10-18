@@ -43,7 +43,7 @@ if ($PSEdition -ne 'Core') {
         Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
     }
     else {
-            scoop update
+        scoop update
     }
 
     if ((scoop config scoop_branch) -ne 'develop') {
@@ -168,6 +168,22 @@ $ScoopBuckets | Install-ScoopBucket
 @(
     'Microsoft.VisualStudioCode'
 ) | Install-WinGetPackage
+
+@(
+    # Command-line utilities
+    'main/microsoft-coreutils'
+    'main/sed'
+    'main/gawk'
+    'main/less'
+    'main/fastfetch'
+    'main/fd'
+    'main/fzf'
+    'main/ripgrep'
+    'main/zoxide'
+    'main/bat'
+    'main/delta'
+    'main/tlrc'
+) | Install-ScoopPackage
 
 if (Test-IsScoopBucketInstalled private) {
     @(
