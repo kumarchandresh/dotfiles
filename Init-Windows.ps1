@@ -4,6 +4,7 @@ param (
 )
 
 # Configure UTF-8 encoding across console streams and pipeline operations
+# https://stackoverflow.com/a/49481797
 $PSDefaultParameterValues['*:Encoding'] = 'utf8'
 $OutputEncoding = [System.Console]::OutputEncoding = [System.Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
@@ -76,14 +77,15 @@ if ($PSEdition -ne 'Core') {
 
 #region Phase 2
 # ---------------------------------------------------------------------------
-# Provision System Dependencies (Elevated)
+# Install System Dependencies (Elevated)
 #
 # Ensure WinGet availability, then elevate once via gsudo to install
-# machine-level dependencies in a separate elevated process.
+# machine-level dependencies in a separate elevated process. Verify pending
+# reboot requirements and install the default WSL distribution.
 # ---------------------------------------------------------------------------
 if (-not (Test-IsProcessElevated)) {
 
-    Write-Title ':: Provision System Dependencies'
+    Write-Title ':: Install System Dependencies'
     try {
         Assert-WinGetPackageManager -Latest -ErrorAction Stop
     }
@@ -93,12 +95,41 @@ if (-not (Test-IsProcessElevated)) {
 
     Write-Yellow 'Running as administrator; expect a UAC prompt...'
     & gsudo --integrity High pwsh -NoProfile -ExecutionPolicy (Get-ExecutionPolicy) -File $PSCommandPath -SelfExecuted
-    if ($LASTEXITCODE -ne 0) {
+    $gsudoExitCode = $LASTEXITCODE
+
+    if ($gsudoExitCode -notin @(0, 3010)) {
         Write-Red 'Elevated system setup failed.'
         exit 1
     }
 
     Restore-EnvPath
+
+    if ($gsudoExitCode -eq 3010) {
+        Write-Yellow 'A system restart is required to activate Windows Subsystem for Linux before continuing.'
+        $restart = Read-Host 'Restart computer now (y/N)? '
+        if ($restart -eq 'y') {
+            Restart-Computer
+        }
+        exit 0
+    }
+
+    if (Test-IsWslAvailable) {
+        $distros = @(wsl --list --quiet 2>$null) -replace "`0", '' |
+        Where-Object { $_ -match '\S' } |
+        ForEach-Object { $_.Trim() }
+
+        @(
+            'archlinux'
+        ) | ForEach-Object {
+            if ($_ -notin $distros) {
+                Write-Green "+ WSL/$_"
+                wsl --install $_ --no-launch
+            }
+            else {
+                Write-Muted "~ WSL/$_"
+            }
+        }
+    }
 }
 else {
 
@@ -107,20 +138,51 @@ else {
         'Microsoft.VCRedist.2015+.x86'
     ) | Install-WinGetPackage -Global
 
+    $pendingReboot = $false
+
+    @(
+        'Microsoft-Windows-Subsystem-Linux'
+        'VirtualMachinePlatform'
+        'HypervisorPlatform'
+    ) | ForEach-Object {
+        $feature = Get-WindowsOptionalFeature -Online -FeatureName $_
+        if ($feature.State -notin @('Enabled', 'EnablePending')) {
+            Write-Green "+ WindowsOptionalFeature/$_"
+            $result = Enable-WindowsOptionalFeature -Online -FeatureName $_ -All -NoRestart
+            if ($result.RestartNeeded) {
+                $script:pendingReboot = $true
+            }
+        }
+        else {
+            Write-Muted "~ WindowsOptionalFeature/$_"
+            if ($feature.State -eq 'EnablePending') {
+                $script:pendingReboot = $true
+            }
+        }
+    }
+
+    if (-not (Test-IsWslAvailable)) {
+        wsl --update
+    }
+
+    if ($pendingReboot) {
+        exit 3010
+    }
+
     exit 0
 }
 #endregion
 
 #region Phase 3
 # ---------------------------------------------------------------------------
-# Deploy Dotfiles and Secrets (Chezmoi & Bitwarden)
+# Apply Dotfiles and Secrets (Chezmoi & Bitwarden)
 #
 # Unlock Bitwarden to decrypt secrets and apply Chezmoi dotfiles.
-# Deploys personal configuration files and GitHub SSH keys required before
+# Applies personal configuration files and GitHub SSH keys required before
 # cloning private repositories.
 # ---------------------------------------------------------------------------
 
-Write-Title ':: Deploy Dotfiles and Secrets (Chezmoi & Bitwarden)'
+Write-Title ':: Apply Dotfiles and Secrets (Chezmoi & Bitwarden)'
 
 try {
     Unlock-Bitwarden
@@ -144,13 +206,12 @@ finally {
 
 #region Phase 4
 # ---------------------------------------------------------------------------
-# Extend Package Sources and Install User Applications
+# Install Applications, CLI Tools, and SDKs
 #
-# Complete bootstrapping. Leverage GitHub SSH keys deployed by Chezmoi to clone
-# the private Scoop bucket without credential friction. Configure all extended
-# buckets and install remaining user-space applications and fonts.
+# Add extra Scoop buckets (including private buckets authenticated via SSH),
+# then install desktop applications, CLI developer tools, SDKs, and fonts.
 # ---------------------------------------------------------------------------
-Write-Title ':: Extend Package Sources and Install User Applications'
+Write-Title ':: Install Applications, CLI Tools, and SDKs'
 
 $ScoopBuckets = @(
     [PSCustomObject]@{ Name = 'main' },

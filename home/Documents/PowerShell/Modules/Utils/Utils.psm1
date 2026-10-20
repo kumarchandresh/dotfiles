@@ -86,3 +86,54 @@ function Test-IsCommandAvailable {
 
     [bool](Get-Command -Name $Command -ErrorAction SilentlyContinue)
 }
+
+function Test-IsWslAvailable {
+    if (-not (Test-IsCommandAvailable 'wsl')) {
+        return $false
+    }
+
+    $status = (wsl --status 2>&1 | Out-String) -replace "`0", ''
+    return [bool]($status -match 'Default Version:\s+[12]')
+}
+
+# https://stackoverflow.com/a/47869761
+# https://stackoverflow.com/a/68627581
+function Test-IsRebootPending {
+    # 1. Component Based Servicing (CBS)
+    $cbsPending = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+    (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootInProgress') -or
+    (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\PackagesPending')
+
+    # 2. Windows Update & Update Orchestrator
+    $wuauPending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
+    $orchPending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\RebootRequired'
+    $windowsUpdate = $wuauPending -or $orchPending
+
+    # 3. Windows Installer (MSI) InProgress
+    $msiPending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\InProgress'
+
+    # 4. Computer Rename Pending
+    $actComp = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name 'ComputerName' -ErrorAction SilentlyContinue
+    $pendingComp = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -ErrorAction SilentlyContinue
+    $compRenamePending = [bool]($actComp -and $pendingComp -and ($actComp -ne $pendingComp))
+
+    # 5. PendingFileRenameOperations (Filtered to ignore deletes; source: https://stackoverflow.com/a/68627581)
+    $fileRenamePending = $false
+    $sessionManager = Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -ErrorAction SilentlyContinue
+    $rawRenameOps = if ($sessionManager) { $sessionManager.GetValue('PendingFileRenameOperations') }
+    if ($rawRenameOps) {
+        $pairCount = [int]($rawRenameOps.Length / 2)
+        for ($i = 0; $i -lt $pairCount; $i++) {
+            $destination = $rawRenameOps[$i * 2 + 1]
+            if (-not [string]::IsNullOrEmpty($destination)) {
+                $fileRenamePending = $true
+                break
+            }
+        }
+    }
+
+    return ($cbsPending -or $windowsUpdate -or $msiPending -or $compRenamePending -or $fileRenamePending)
+}
+
+
+
