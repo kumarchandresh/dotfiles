@@ -3,7 +3,7 @@
 Import-Module 'Microsoft.WinGet.Client'
 Import-Module "$PSScriptRoot/../Utils"
 
-function Test-IsWinGetPackageInstalled {
+function Test-WinGetPackageInstalled {
     [CmdletBinding()]
     [OutputType([bool])]
     param (
@@ -22,7 +22,7 @@ function Test-IsWinGetPackageInstalled {
         $params['Source'] = $Source
     }
 
-    [bool](Get-WinGetPackage @params)
+    return [bool](Get-WinGetPackage @params)
 }
 
 function Install-WinGetPackage {
@@ -67,7 +67,7 @@ function Install-WinGetPackage {
         $installed = Get-WinGetPackage @getPackageParams
 
         if ($installed -and (-not $SavePrefs) -and (-not $installed.IsUpdateAvailable)) {
-            Write-Green "$Id is already up to date"
+            Write-Muted "~ winget/$Id"
             return
         }
 
@@ -140,7 +140,7 @@ function Install-WinGetPackage {
             $targetFile = Join-Path $PSScriptRoot "Prefs/$Id$ext"
             $targetDir = Split-Path -Path $targetFile -Parent
             if ($targetDir -and -not (Test-Path $targetDir)) {
-                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+                $null = New-Item -ItemType Directory -Path $targetDir -Force
             }
 
             switch ($type) {
@@ -151,7 +151,7 @@ function Install-WinGetPackage {
                 { $_ -in @('wix', 'burn') } {
                     $logDir = Join-Path $env:TEMP 'Logs'
                     if (-not (Test-Path $logDir)) {
-                        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+                        $null = New-Item -ItemType Directory -Path $logDir -Force
                     }
                     $cmdletParams['Mode'] = 'Interactive'
                     $cmdletParams['Custom'] = "/log `"$logDir\$Id.log`""
@@ -235,9 +235,15 @@ function Install-WinGetPackage {
             }) -join ' '
         $action = if ($installed -and (-not $SavePrefs)) { 'Update' } else { 'Install' }
 
+        if ($action -eq 'Update') {
+            Write-Green "^ winget/$Id"
+        }
+        else {
+            Write-Green "+ winget/$Id"
+        }
         Write-Muted "$([char]0x203A) $action-WinGetPackage $displayArgs"
         & "Microsoft.WinGet.Client\$action-WinGetPackage" @cmdletParams
     }
 }
 
-Export-ModuleMember -Function Test-IsWinGetPackageInstalled, Install-WinGetPackage
+Export-ModuleMember -Function Test-WinGetPackageInstalled, Install-WinGetPackage

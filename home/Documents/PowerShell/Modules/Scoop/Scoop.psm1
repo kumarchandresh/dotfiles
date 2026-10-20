@@ -1,6 +1,6 @@
 Import-Module "$PSScriptRoot/../Utils"
 
-function Test-IsScoopPackageInstalled {
+function Test-ScoopPackageInstalled {
     [CmdletBinding()]
     [OutputType([bool])]
     param (
@@ -15,7 +15,7 @@ function Test-IsScoopPackageInstalled {
         return $true
     }
 
-    [bool](scoop list | Where-Object -Property Name -eq $Name)
+    return [bool](scoop list | Where-Object -Property Name -eq $Name)
 }
 
 function Install-ScoopPackage {
@@ -56,31 +56,33 @@ function Install-ScoopPackage {
             }
         }
 
-        $isInstalled = Test-IsScoopPackageInstalled $name
-        $arguments = @(if ($isInstalled) { 'update' } else { 'install' })
+        $installed = Test-ScoopPackageInstalled $name
+        $arguments = @(if ($installed) { 'update' } else { 'install' })
         if ($Global) {
             $arguments += '--global'
         }
         $arguments += $Package
 
-        if ($isInstalled) {
+        if ($installed) {
             $output = (& scoop @arguments *>&1 | Out-String)
             if ($output -match '\(latest version\)') {
-                Write-Green "$Package is already up to date"
+                Write-Muted "~ scoop/$Package"
             }
             else {
+                Write-Green "^ scoop/$Package"
                 Write-Muted "$([char]0x203A) scoop $($arguments -join ' ')"
                 if ($output) { Write-Output $output.Trim() }
             }
         }
         else {
+            Write-Green "+ scoop/$Package"
             Write-Muted "$([char]0x203A) scoop $($arguments -join ' ')"
             & scoop @arguments
         }
     }
 }
 
-function Test-IsScoopBucketInstalled {
+function Test-ScoopBucketInstalled {
     [CmdletBinding()]
     [OutputType([bool])]
     param (
@@ -93,7 +95,7 @@ function Test-IsScoopBucketInstalled {
         return $true
     }
 
-    [bool](scoop bucket list | Where-Object -Property Name -eq $Name)
+    return [bool](scoop bucket list | Where-Object -Property Name -eq $Name)
 }
 
 function Install-ScoopBucket {
@@ -109,19 +111,22 @@ function Install-ScoopBucket {
         $scoopDir = if ($env:SCOOP) { $env:SCOOP } else { "$HOME/scoop" }
         if (-not (Test-Path (Join-Path $scoopDir "buckets/$Name/.git"))) {
             if (Test-Path (Join-Path $scoopDir "buckets/$Name")) {
-                Write-Red "- bucket/$Name"
+                Write-Red "- scoop/bucket/$Name"
+                Write-Muted "$([char]0x203A) scoop bucket rm $Name"
                 scoop bucket rm $Name
             }
-            Write-Green "+ bucket/$Name"
+            Write-Green "+ scoop/bucket/$Name"
             if ($Repo) {
+                Write-Muted "$([char]0x203A) scoop bucket add $Name $Repo"
                 scoop bucket add $Name $Repo
             }
             else {
+                Write-Muted "$([char]0x203A) scoop bucket add $Name"
                 scoop bucket add $Name
             }
         }
         else {
-            Write-Muted "~ bucket/$Name"
+            Write-Muted "~ scoop/bucket/$Name"
         }
     }
 }

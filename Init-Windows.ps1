@@ -11,13 +11,14 @@ $OutputEncoding = [System.Console]::OutputEncoding = [System.Console]::InputEnco
 Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/Utils"
 Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/Bitwarden"
 Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/Scoop"
+Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/WSL"
 
 if ($PSEdition -eq 'Core') {
     Import-Module -Force 'Microsoft.WinGet.Client'
     Import-Module -Force "$PSScriptRoot/home/Documents/PowerShell/Modules/WinGet"
 }
 
-if ((Test-IsProcessElevated) -and (-not $SelfExecuted)) {
+if ((Test-ProcessElevated) -and (-not $SelfExecuted)) {
     Write-Red 'Cannot be executed from an elevated PowerShell session.'
     exit 1
 }
@@ -31,7 +32,7 @@ Restore-EnvPath
 
 #region Phase 1
 # ---------------------------------------------------------------------------
-# Bootstrap Scoop, PowerShell Core, and Core CLI Tools
+# Bootstrap Scoop and PowerShell Core
 #
 # Bootstrap Scoop in user-space without elevation to acquire Git, PowerShell Core,
 # gsudo, winget-ps, chezmoi, and bitwarden-cli in a single batched operation.
@@ -39,8 +40,8 @@ Restore-EnvPath
 # ---------------------------------------------------------------------------
 if ($PSEdition -ne 'Core') {
 
-    Write-Title ':: Bootstrap Scoop, PowerShell Core, and Core CLI Tools'
-    if (-not (Test-IsCommandAvailable 'scoop')) {
+    Write-Title ':: Bootstrap Scoop and PowerShell Core'
+    if (-not (Test-CommandAvailable scoop)) {
         Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
     }
     else {
@@ -83,7 +84,7 @@ if ($PSEdition -ne 'Core') {
 # machine-level dependencies in a separate elevated process. Verify pending
 # reboot requirements and install the default WSL distribution.
 # ---------------------------------------------------------------------------
-if (-not (Test-IsProcessElevated)) {
+if (-not (Test-ProcessElevated)) {
 
     Write-Title ':: Install System Dependencies'
     try {
@@ -93,7 +94,7 @@ if (-not (Test-IsProcessElevated)) {
         Repair-WinGetPackageManager -Latest -Force
     }
 
-    Write-Yellow 'Running as administrator; expect a UAC prompt...'
+    Write-Yellow '! Running as administrator; expect a UAC prompt...'
     & gsudo --integrity High pwsh -NoProfile -ExecutionPolicy (Get-ExecutionPolicy) -File $PSCommandPath -SelfExecuted
     $gsudoExitCode = $LASTEXITCODE
 
@@ -105,7 +106,7 @@ if (-not (Test-IsProcessElevated)) {
     Restore-EnvPath
 
     if ($gsudoExitCode -eq 3010) {
-        Write-Yellow 'A system restart is required to activate Windows Subsystem for Linux before continuing.'
+        Write-Yellow '! A system restart is required to activate Windows Subsystem for Linux before continuing.'
         $restart = Read-Host 'Restart computer now (y/N)? '
         if ($restart -eq 'y') {
             Restart-Computer
@@ -113,22 +114,10 @@ if (-not (Test-IsProcessElevated)) {
         exit 0
     }
 
-    if (Test-IsWslAvailable) {
-        $distros = @(wsl --list --quiet 2>$null) -replace "`0", '' |
-        Where-Object { $_ -match '\S' } |
-        ForEach-Object { $_.Trim() }
-
+    if (Test-WslAvailable) {
         @(
             'archlinux'
-        ) | ForEach-Object {
-            if ($_ -notin $distros) {
-                Write-Green "+ WSL/$_"
-                wsl --install $_ --no-launch
-            }
-            else {
-                Write-Muted "~ WSL/$_"
-            }
-        }
+        ) | Install-WslDistro
     }
 }
 else {
@@ -161,8 +150,8 @@ else {
         }
     }
 
-    if (-not (Test-IsWslAvailable)) {
-        wsl --update
+    if (-not (Test-WslAvailable)) {
+        Update-Wsl
     }
 
     if ($pendingReboot) {
@@ -175,18 +164,22 @@ else {
 
 #region Phase 3
 # ---------------------------------------------------------------------------
-# Apply Dotfiles and Secrets (Chezmoi & Bitwarden)
+# Apply Dotfiles and Secrets
 #
 # Unlock Bitwarden to decrypt secrets and apply Chezmoi dotfiles.
 # Applies personal configuration files and GitHub SSH keys required before
 # cloning private repositories.
 # ---------------------------------------------------------------------------
 
-Write-Title ':: Apply Dotfiles and Secrets (Chezmoi & Bitwarden)'
+Write-Title ':: Apply Dotfiles and Secrets'
+
+$bwStatus = Unlock-Bitwarden
+if ($bwStatus -eq 'Failed') {
+    Write-Red 'Bitwarden vault is locked; cannot apply dotfiles.'
+    exit 1
+}
 
 try {
-    Unlock-Bitwarden
-
     chezmoi git status *> $null
     if ($LASTEXITCODE -ne 0) {
         chezmoi init kumarchandresh --apply --force
@@ -200,18 +193,20 @@ try {
     }
 }
 finally {
-    Lock-Bitwarden
+    if ($bwStatus -eq 'Unlocked') {
+        Lock-Bitwarden
+    }
 }
 #endregion
 
 #region Phase 4
 # ---------------------------------------------------------------------------
-# Install Applications, CLI Tools, and SDKs
+# Install Remaining Packages
 #
 # Add extra Scoop buckets (including private buckets authenticated via SSH),
-# then install desktop applications, CLI developer tools, SDKs, and fonts.
+# then install remaining user packages.
 # ---------------------------------------------------------------------------
-Write-Title ':: Install Applications, CLI Tools, and SDKs'
+Write-Title ':: Install Remaining Packages'
 
 $ScoopBuckets = @(
     [PSCustomObject]@{ Name = 'main' },
@@ -246,7 +241,7 @@ $ScoopBuckets | Install-ScoopBucket
     'main/tlrc'
 ) | Install-ScoopPackage
 
-if (Test-IsScoopBucketInstalled private) {
+if (Test-ScoopBucketInstalled private) {
     @(
         'private/MonoLisa'
     ) | Install-ScoopPackage

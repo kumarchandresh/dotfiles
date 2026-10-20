@@ -1,10 +1,17 @@
-function Test-IsProcessElevated {
+function Test-ProcessElevated {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param ()
+
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]$identity
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
 function Restore-EnvPath {
+    [CmdletBinding()]
+    param ()
+
     # https://superuser.com/q/867728/1042970
     # Windows is crazy; it prepends system path to user path; which results in
     # system applications taking precedence over user applications.
@@ -77,18 +84,23 @@ function Write-DarkMagenta { Write-ColorOutput $args -ForegroundColor DarkMagent
 function Write-DarkRed { Write-ColorOutput $args -ForegroundColor DarkRed }
 function Write-DarkYellow { Write-ColorOutput $args -ForegroundColor DarkYellow }
 
-function Test-IsCommandAvailable {
+function Test-CommandAvailable {
     [CmdletBinding()]
+    [OutputType([bool])]
     param (
         [Parameter(Mandatory)]
         [string]$Command
     )
 
-    [bool](Get-Command -Name $Command -ErrorAction SilentlyContinue)
+    return [bool](Get-Command -Name $Command -ErrorAction SilentlyContinue)
 }
 
-function Test-IsWslAvailable {
-    if (-not (Test-IsCommandAvailable 'wsl')) {
+function Test-WslAvailable {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param ()
+
+    if (-not (Test-CommandAvailable wsl)) {
         return $false
     }
 
@@ -98,7 +110,11 @@ function Test-IsWslAvailable {
 
 # https://stackoverflow.com/a/47869761
 # https://stackoverflow.com/a/68627581
-function Test-IsRebootPending {
+function Test-RebootPending {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param ()
+
     # 1. Component Based Servicing (CBS)
     $cbsPending = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
     (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootInProgress') -or

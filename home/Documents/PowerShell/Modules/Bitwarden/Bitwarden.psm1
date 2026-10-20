@@ -5,7 +5,7 @@ function Unlock-Bitwarden {
     [OutputType([string])]
     param ()
 
-    if (-not (Test-IsCommandAvailable bw)) {
+    if (-not (Test-CommandAvailable bw)) {
         Write-Error 'Bitwarden CLI is not on PATH; aborted.' -Category NotInstalled
         return 'Failed'
     }
@@ -29,7 +29,7 @@ function Unlock-Bitwarden {
                 break
             }
             'unlocked' {
-                Write-Green 'Bitwarden is already unlocked'
+                Write-Muted '~ bitwarden (already unlocked)'
                 return 'AlreadyUnlocked'
             }
             default {
@@ -38,7 +38,7 @@ function Unlock-Bitwarden {
         }
 
         if ($exitCode -eq 0) {
-            Write-Green 'Bitwarden unlocked successfully'
+            Write-Green '+ bitwarden (unlocked)'
             [System.Environment]::SetEnvironmentVariable('BW_SESSION', $sessionId, [System.EnvironmentVariableTarget]::Process)
             [System.Environment]::SetEnvironmentVariable('BW_SESSION', $sessionId, [System.EnvironmentVariableTarget]::User)
             return 'Unlocked'
@@ -59,6 +59,9 @@ function Unlock-Bitwarden {
 }
 
 function Lock-Bitwarden {
+    [CmdletBinding()]
+    param ()
+
     [System.Environment]::SetEnvironmentVariable('BW_SESSION', $null, [System.EnvironmentVariableTarget]::Process)
     [System.Environment]::SetEnvironmentVariable('BW_SESSION', $null, [System.EnvironmentVariableTarget]::User)
 }
