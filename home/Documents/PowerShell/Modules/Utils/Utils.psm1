@@ -109,5 +109,34 @@ function Test-RebootPending {
     return ($cbsPending -or $windowsUpdate -or $msiPending -or $compRenamePending -or $fileRenamePending)
 }
 
+function Test-JsonEqual {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [object]$Json1,
 
+        [Parameter(Mandatory, Position = 1)]
+        [object]$Json2
+    )
 
+    if ($PSVersionTable.PSVersion -lt [Version]'7.2') {
+        throw "Test-JsonEqual requires PowerShell 7.2 or higher (current version: $($PSVersionTable.PSVersion))."
+    }
+
+    $toJsonString = {
+        param($val)
+        if ($val -is [string] -and ($val.TrimStart().StartsWith('{') -or $val.TrimStart().StartsWith('['))) {
+            return $val
+        }
+        return ($val | ConvertTo-Json -Depth 10)
+    }
+
+    $str1 = & $toJsonString $Json1
+    $str2 = & $toJsonString $Json2
+
+    $node1 = [System.Text.Json.Nodes.JsonNode]::Parse($str1)
+    $node2 = [System.Text.Json.Nodes.JsonNode]::Parse($str2)
+
+    return [System.Text.Json.Nodes.JsonNode]::DeepEquals($node1, $node2)
+}

@@ -240,6 +240,8 @@ $ScoopBuckets | Install-ScoopBucket
     'main/bat'
     'main/delta'
     'main/tlrc'
+    'extras/terminal-icons'
+    'fonts/SymbolsNerdFont'
 ) | Install-ScoopPackage
 
 if (Test-ScoopBucketInstalled private) {
