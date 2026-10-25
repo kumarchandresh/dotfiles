@@ -39,8 +39,7 @@ function Unlock-Bitwarden {
 
         if ($exitCode -eq 0) {
             Write-Green '+ bitwarden (unlocked)'
-            [System.Environment]::SetEnvironmentVariable('BW_SESSION', $sessionId, [System.EnvironmentVariableTarget]::Process)
-            [System.Environment]::SetEnvironmentVariable('BW_SESSION', $sessionId, [System.EnvironmentVariableTarget]::User)
+            $env:BW_SESSION = $sessionId
             return 'Unlocked'
         }
         else {
@@ -62,6 +61,5 @@ function Lock-Bitwarden {
     [CmdletBinding()]
     param ()
 
-    [System.Environment]::SetEnvironmentVariable('BW_SESSION', $null, [System.EnvironmentVariableTarget]::Process)
-    [System.Environment]::SetEnvironmentVariable('BW_SESSION', $null, [System.EnvironmentVariableTarget]::User)
+    $env:BW_SESSION = $null
 }
