@@ -1,0 +1,7 @@
+{{- $base := output "starship" "preset" "pure-preset" | fromToml -}}
+{{- $user := fromToml `
+
+[package]
+disabled = true
+` -}}
+{{- mergeOverwrite $base $user | toToml -}}

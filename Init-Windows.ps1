@@ -68,6 +68,7 @@ if ($PSEdition -ne 'Core') {
         'main/winget-ps'
         'main/chezmoi'
         'main/bitwarden-cli'
+        'main/starship'
     ) | Install-ScoopPackage
 
     # Re-launch in PowerShell Core to continue execution
