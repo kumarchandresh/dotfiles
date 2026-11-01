@@ -71,13 +71,13 @@ function Install-ScoopPackage {
             else {
                 Write-Green "^ scoop/$Package"
                 Write-Muted "$([char]0x203A) scoop $($arguments -join ' ')"
-                if ($output) { Write-Output $output.Trim() }
+                if ($output) { $output.Trim() | Out-Host }
             }
         }
         else {
             Write-Green "+ scoop/$Package"
             Write-Muted "$([char]0x203A) scoop $($arguments -join ' ')"
-            & scoop @arguments
+            & scoop @arguments | Out-Host
         }
     }
 }
@@ -113,16 +113,16 @@ function Install-ScoopBucket {
             if (Test-Path (Join-Path $scoopDir "buckets/$Name")) {
                 Write-Red "- scoop/bucket/$Name"
                 Write-Muted "$([char]0x203A) scoop bucket rm $Name"
-                scoop bucket rm $Name
+                scoop bucket rm $Name | Out-Host
             }
             Write-Green "+ scoop/bucket/$Name"
             if ($Repo) {
                 Write-Muted "$([char]0x203A) scoop bucket add $Name $Repo"
-                scoop bucket add $Name $Repo
+                scoop bucket add $Name $Repo | Out-Host
             }
             else {
                 Write-Muted "$([char]0x203A) scoop bucket add $Name"
-                scoop bucket add $Name
+                scoop bucket add $Name | Out-Host
             }
         }
         else {

@@ -1,209 +1,153 @@
-#requires -PSEdition Core
-
-Import-Module 'Microsoft.WinGet.Client'
 Import-Module "$PSScriptRoot/../Utils"
 
-function Test-WinGetPackageInstalled {
-    [CmdletBinding()]
-    [OutputType([bool])]
-    param (
-        [Parameter(Mandatory)]
-        [string]$Id,
+#region using winget-ps
+if ($PSEdition -eq 'Core') {
+    Import-Module 'Microsoft.WinGet.Client'
 
-        [Parameter()]
-        [string]$Source = 'winget'
-    )
+    function Test-WinGetPackageInstalled {
+        [CmdletBinding()]
+        [OutputType([bool])]
+        param (
+            [Parameter(Mandatory)]
+            [string]$Id,
 
-    $params = @{
-        Id          = $Id
-        MatchOption = 'Equals'
-    }
-    if (-not [string]::IsNullOrEmpty($Source)) {
-        $params['Source'] = $Source
-    }
+            [Parameter()]
+            [string]$Source = 'winget'
+        )
 
-    return [bool](Get-WinGetPackage @params)
-}
-
-function Install-WinGetPackage {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName, Position = 0)]
-        [string]$Id,
-
-        [Parameter(ValueFromPipelineByPropertyName)]
-        [string]$InstallerType,
-
-        [Parameter(ValueFromPipelineByPropertyName)]
-        [string]$Custom,
-
-        [Parameter(ValueFromPipelineByPropertyName)]
-        [string]$Override,
-
-        [Parameter(ValueFromPipelineByPropertyName)]
-        [string]$Location,
-
-        [Parameter(ValueFromPipelineByPropertyName)]
-        [string]$Source = 'winget',
-
-        [Parameter(ValueFromPipelineByPropertyName)]
-        [switch]$Global,
-
-        [Parameter(ValueFromPipelineByPropertyName)]
-        [switch]$SavePrefs
-    )
-
-    process {
-        $scope = if ($Global) { 'System' } else { 'User' }
-
-        # 1. Check existing installation
-        $getPackageParams = @{
+        $params = @{
             Id          = $Id
             MatchOption = 'Equals'
         }
         if (-not [string]::IsNullOrEmpty($Source)) {
-            $getPackageParams['Source'] = $Source
-        }
-        $installed = Get-WinGetPackage @getPackageParams
-
-        if ($installed -and (-not $SavePrefs) -and (-not $installed.IsUpdateAvailable)) {
-            Write-Muted "~ winget/$Id"
-            return
+            $params['Source'] = $Source
         }
 
-        # 2. Resolve installer type if needed
-        $type = $InstallerType
-        if (-not $type) {
-            if (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.inf")) {
-                $type = 'inno'
-            }
-            elseif (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.txt")) {
-                $type = 'wix'
-            }
-            elseif ($Custom -and $Custom.EndsWith('.inf', [System.StringComparison]::OrdinalIgnoreCase)) {
-                $type = 'inno'
-            }
-            elseif ($Custom -and $Custom.EndsWith('.txt', [System.StringComparison]::OrdinalIgnoreCase)) {
-                $type = 'wix'
-            }
-        }
+        return [bool](Get-WinGetPackage @params)
+    }
 
-        if (-not $type -and ($SavePrefs -or ($Custom -and $Custom.StartsWith('file:', [System.StringComparison]::OrdinalIgnoreCase)))) {
-            $cliScope = if ($Global) { 'machine' } else { 'user' }
-            $cliArgs = @('--exact', '--id', $Id, '--scope', $cliScope, '--accept-source-agreements', '--disable-interactivity')
+    function Install-WinGetPackage {
+        [CmdletBinding()]
+        param (
+            [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName, Position = 0)]
+            [string]$Id,
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [string]$InstallerType,
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [string]$Location,
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [string]$Source = 'winget',
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [switch]$Global,
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [switch]$SavePrefs
+        )
+
+        process {
+            $scope = if ($Global) { 'System' } else { 'User' }
+
+            # 1. Check existing installation
+            $getPackageParams = @{
+                Id          = $Id
+                MatchOption = 'Equals'
+            }
             if (-not [string]::IsNullOrEmpty($Source)) {
-                $cliArgs += @('--source', $Source)
+                $getPackageParams['Source'] = $Source
             }
+            $installed = Get-WinGetPackage @getPackageParams
 
-            $info = & winget show @cliArgs | Out-String
-            if ($info -match 'Installer\s*Type:\s+(.*)') {
-                $type = $matches[1].Trim().ToLower()
-            }
-        }
-
-        # 3. Construct base cmdlet parameters
-        $cmdletParams = [ordered]@{
-            Id          = $Id
-            MatchOption = 'Equals'
-            Scope       = $scope
-        }
-
-        if (-not [string]::IsNullOrEmpty($Source)) {
-            $cmdletParams['Source'] = $Source
-        }
-        if (-not [string]::IsNullOrEmpty($Location)) {
-            $cmdletParams['Location'] = $Location
-        }
-        if ($PSBoundParameters.ContainsKey('InstallerType')) {
-            $cmdletParams['InstallerType'] = $InstallerType
-        }
-
-        # 4. Handle -SavePrefs (Authoring Mode) or Configuration Arguments
-        if ($SavePrefs) {
-            if (($Custom -and $Custom.StartsWith('file:', [System.StringComparison]::OrdinalIgnoreCase)) -or
-                ($Override -and $Override.StartsWith('file:', [System.StringComparison]::OrdinalIgnoreCase))) {
-                Write-Red "Cannot load a config file and specify -SavePrefs at the same time."
+            if ($installed -and (-not $SavePrefs) -and (-not $installed.IsUpdateAvailable)) {
+                Write-Muted "~ winget/$Id"
                 return
             }
 
-            $ext = switch ($type) {
-                'inno' { '.inf' }
-                { $_ -in @('wix', 'burn') } { '.txt' }
-                default { $null }
-            }
-
-            if (-not $ext) {
-                Write-Red "Saving config is not supported for installer type: $type"
-                return
-            }
-
-            $targetFile = Join-Path $PSScriptRoot "Prefs/$Id$ext"
-            $targetDir = Split-Path -Path $targetFile -Parent
-            if ($targetDir -and -not (Test-Path $targetDir)) {
-                $null = New-Item -ItemType Directory -Path $targetDir -Force
-            }
-
-            switch ($type) {
-                'inno' {
-                    $cmdletParams['Mode'] = 'Interactive'
-                    $cmdletParams['Custom'] = "/SAVEINF=`"$targetFile`""
+            # 2. Resolve installer type if needed
+            $type = $InstallerType
+            if (-not $type) {
+                if (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.inf")) {
+                    $type = 'inno'
                 }
-                { $_ -in @('wix', 'burn') } {
-                    $logDir = Join-Path $env:TEMP 'Logs'
-                    if (-not (Test-Path $logDir)) {
-                        $null = New-Item -ItemType Directory -Path $logDir -Force
-                    }
-                    $cmdletParams['Mode'] = 'Interactive'
-                    $cmdletParams['Custom'] = "/log `"$logDir\$Id.log`""
-                }
-            }
-        }
-        else {
-            # Resolve -Override
-            if ($Override) {
-                if ($Override.StartsWith('file:', [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $filePath = $Override.Substring(5).Trim()
-                    if (-not [System.IO.Path]::IsPathRooted($filePath)) {
-                        $filePath = Join-Path $PSScriptRoot "Prefs/$filePath"
-                    }
-                    if (-not (Test-Path $filePath)) {
-                        Write-Red "Preference file not found: $filePath"
-                        return
-                    }
-                    $content = (Get-Content -Path $filePath) -join ' '
-                    $cmdletParams['Override'] = [System.Environment]::ExpandEnvironmentVariables($content)
-                }
-                else {
-                    $cmdletParams['Override'] = $Override
+                elseif (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.txt")) {
+                    $type = 'wix'
                 }
             }
 
-            # Resolve -Custom
-            if ($Custom) {
-                if ($Custom.StartsWith('file:', [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $filePath = $Custom.Substring(5).Trim()
-                    if (-not [System.IO.Path]::IsPathRooted($filePath)) {
-                        $filePath = Join-Path $PSScriptRoot "Prefs/$filePath"
-                    }
-                    if (-not (Test-Path $filePath)) {
-                        Write-Red "Preference file not found: $filePath"
-                        return
-                    }
-
-                    if ($type -eq 'inno' -or $filePath.EndsWith('.inf', [System.StringComparison]::OrdinalIgnoreCase)) {
-                        $cmdletParams['Custom'] = "/LOADINF=`"$filePath`""
-                    }
-                    else {
-                        $content = (Get-Content -Path $filePath) -join ' '
-                        $cmdletParams['Custom'] = [System.Environment]::ExpandEnvironmentVariables($content)
-                    }
+            if (-not $type -and $SavePrefs) {
+                $cliScope = if ($Global) { 'machine' } else { 'user' }
+                $cliArgs = @('--exact', '--id', $Id, '--scope', $cliScope, '--accept-source-agreements', '--disable-interactivity')
+                if (-not [string]::IsNullOrEmpty($Source)) {
+                    $cliArgs += @('--source', $Source)
                 }
-                else {
-                    $cmdletParams['Custom'] = $Custom
+
+                $info = & winget show @cliArgs 2>$null | Out-String
+                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($info) -or $info -match 'No package found') {
+                    Write-Red "Package '$Id' not found."
+                    return
+                }
+                if ($info -match 'Installer\s*Type:\s+(.*)') {
+                    $type = $matches[1].Trim().ToLower()
                 }
             }
-            elseif (-not $Override) {
-                # Auto-discovery fallback if neither -Custom nor -Override was provided
+
+            # 3. Construct base cmdlet parameters
+            $cmdletParams = [ordered]@{
+                Id          = $Id
+                MatchOption = 'Equals'
+                Scope       = $scope
+            }
+
+            if (-not [string]::IsNullOrEmpty($Source)) {
+                $cmdletParams['Source'] = $Source
+            }
+            if (-not [string]::IsNullOrEmpty($Location)) {
+                $cmdletParams['Location'] = $Location
+            }
+            if (-not [string]::IsNullOrEmpty($InstallerType)) {
+                $cmdletParams['InstallerType'] = $InstallerType
+            }
+
+            # 4. Handle -SavePrefs (Authoring Mode) or Implicit Prefs
+            if ($SavePrefs) {
+                $ext = switch ($type) {
+                    'inno' { '.inf' }
+                    { $_ -in @('wix', 'burn') } { '.txt' }
+                    default { $null }
+                }
+
+                if (-not $ext) {
+                    $typeMsg = if ($type) { $type } else { 'unknown' }
+                    Write-Red "Saving config is not supported for installer type: $typeMsg"
+                    return
+                }
+
+                $targetFile = Join-Path $PSScriptRoot "Prefs/$Id$ext"
+                $targetDir = Split-Path -Path $targetFile -Parent
+                if ($targetDir -and -not (Test-Path $targetDir)) {
+                    $null = New-Item -ItemType Directory -Path $targetDir -Force
+                }
+
+                switch ($type) {
+                    'inno' {
+                        $cmdletParams['Mode'] = 'Interactive'
+                        $cmdletParams['Custom'] = "/SAVEINF=`"$targetFile`""
+                    }
+                    { $_ -in @('wix', 'burn') } {
+                        $logDir = Join-Path $env:TEMP 'Logs'
+                        if (-not (Test-Path $logDir)) {
+                            $null = New-Item -ItemType Directory -Path $logDir -Force
+                        }
+                        $cmdletParams['Mode'] = 'Interactive'
+                        $cmdletParams['Custom'] = "/log `"$logDir\$Id.log`""
+                    }
+                }
+            }
+            else {
+                # Implicit preference loading based on convention (Prefs/$Id.inf or Prefs/$Id.txt)
                 $autoInf = Join-Path $PSScriptRoot "Prefs/$Id.inf"
                 $autoTxt = Join-Path $PSScriptRoot "Prefs/$Id.txt"
 
@@ -215,35 +159,227 @@ function Install-WinGetPackage {
                     $cmdletParams['Custom'] = [System.Environment]::ExpandEnvironmentVariables($content)
                 }
             }
-        }
 
-        # 5. Dispatch execution
-        if ($installed -and $SavePrefs) {
-            $cmdletParams['Force'] = $true
-        }
+            # 5. Dispatch execution
+            if ($installed -and $SavePrefs) {
+                $cmdletParams['Force'] = $true
+            }
 
-        $displayArgs = ($cmdletParams.GetEnumerator() | ForEach-Object {
-                if ($_.Value -is [bool] -or $_.Value -is [System.Management.Automation.SwitchParameter]) {
-                    if ($_.Value) { "-$($_.Key)" }
-                }
-                elseif ($_.Value -is [string] -and $_.Value -match '\s') {
-                    "-$($_.Key) `"$($_.Value)`""
-                }
-                else {
-                    "-$($_.Key) $($_.Value)"
-                }
-            }) -join ' '
-        $action = if ($installed -and (-not $SavePrefs)) { 'Update' } else { 'Install' }
+            $displayArgs = ($cmdletParams.GetEnumerator() | ForEach-Object {
+                    if ($_.Value -is [bool] -or $_.Value -is [System.Management.Automation.SwitchParameter]) {
+                        if ($_.Value) { "-$($_.Key)" }
+                    }
+                    elseif ($_.Value -is [string] -and $_.Value -match '\s') {
+                        "-$($_.Key) `"$($_.Value)`""
+                    }
+                    else {
+                        "-$($_.Key) $($_.Value)"
+                    }
+                }) -join ' '
+            $action = if ($installed -and (-not $SavePrefs)) { 'Update' } else { 'Install' }
 
-        if ($action -eq 'Update') {
-            Write-Green "^ winget/$Id"
+            if ($action -eq 'Update') {
+                Write-Green "^ winget/$Id"
+            }
+            else {
+                Write-Green "+ winget/$Id"
+            }
+            Write-Muted "$([char]0x203A) $action-WinGetPackage $displayArgs"
+            & "Microsoft.WinGet.Client\$action-WinGetPackage" @cmdletParams | Out-Host
         }
-        else {
-            Write-Green "+ winget/$Id"
-        }
-        Write-Muted "$([char]0x203A) $action-WinGetPackage $displayArgs"
-        & "Microsoft.WinGet.Client\$action-WinGetPackage" @cmdletParams
     }
 }
+#endregion
+#region using winget.exe
+else {
+    function Test-WinGetPackageInstalled {
+        [CmdletBinding()]
+        [OutputType([bool])]
+        param (
+            [Parameter(Mandatory)]
+            [string]$Id,
+
+            [Parameter()]
+            [string]$Source = 'winget'
+        )
+
+        $cliArgs = @('list', '--exact', '--id', $Id, '--accept-source-agreements')
+        if (-not [string]::IsNullOrEmpty($Source)) {
+            $cliArgs += @('--source', $Source)
+        }
+
+        & winget @cliArgs *>$null
+        return ($LASTEXITCODE -eq 0)
+    }
+
+    function Test-WinGetPackageUpdateAvailable {
+        [CmdletBinding()]
+        [OutputType([bool])]
+        param (
+            [Parameter(Mandatory)]
+            [string]$Id,
+
+            [Parameter()]
+            [string]$Source = 'winget'
+        )
+
+        $cliArgs = @('list', '--exact', '--id', $Id, '--upgrade-available', '--accept-source-agreements')
+        if (-not [string]::IsNullOrEmpty($Source)) {
+            $cliArgs += @('--source', $Source)
+        }
+
+        $output = & winget @cliArgs 2>$null | Out-String
+        return [bool]($output -match '\d+ upgrades? available')
+    }
+
+    function Install-WinGetPackage {
+        [CmdletBinding()]
+        param (
+            [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName, Position = 0)]
+            [string]$Id,
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [string]$InstallerType,
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [string]$Location,
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [string]$Source = 'winget',
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [switch]$Global,
+
+            [Parameter(ValueFromPipelineByPropertyName)]
+            [switch]$SavePrefs
+        )
+
+        process {
+            $scope = if ($Global) { 'machine' } else { 'user' }
+
+            # 1. Check existing installation
+            $package = @{ Id = $Id }
+            if (-not [string]::IsNullOrEmpty($Source)) {
+                $package['Source'] = $Source
+            }
+
+            $installed = Test-WinGetPackageInstalled @package
+            $updateAvailable = if ($installed) { Test-WinGetPackageUpdateAvailable @package } else { $false }
+
+            if ($installed -and (-not $SavePrefs) -and (-not $updateAvailable)) {
+                Write-Muted "~ winget/$Id"
+                return
+            }
+
+            # 2. Resolve installer type if needed
+            $type = $InstallerType
+            if (-not $type) {
+                if (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.inf")) {
+                    $type = 'inno'
+                }
+                elseif (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.txt")) {
+                    $type = 'wix'
+                }
+            }
+
+            # Query show info if installer type is needed for prefs
+            if (-not $type -and $SavePrefs) {
+                $cliShowArgs = @('--exact', '--id', $Id, '--scope', $scope, '--accept-source-agreements', '--disable-interactivity')
+                if (-not [string]::IsNullOrEmpty($Source)) {
+                    $cliShowArgs += @('--source', $Source)
+                }
+
+                $info = & winget show @cliShowArgs 2>$null | Out-String
+                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($info) -or $info -match 'No package found') {
+                    Write-Red "Package '$Id' not found."
+                    return
+                }
+                if ($info -match 'Installer\s*Type:\s+(.*)') {
+                    $type = $matches[1].Trim().ToLower()
+                }
+            }
+
+            # 3. Construct install/upgrade arguments
+            $cliArgs = @('--exact', '--id', $Id, '--scope', $scope, '--accept-source-agreements', '--accept-package-agreements')
+            if (-not [string]::IsNullOrEmpty($Source)) {
+                $cliArgs += @('--source', $Source)
+            }
+            if (-not [string]::IsNullOrEmpty($Location)) {
+                $cliArgs += @('--location', $Location)
+            }
+            if (-not [string]::IsNullOrEmpty($InstallerType)) {
+                $cliArgs += @('--installer-type', $InstallerType)
+            }
+
+            # 4. Handle -SavePrefs or Implicit Prefs
+            if ($SavePrefs) {
+                $cliArgs += @('--interactive')
+
+                $ext = switch ($type) {
+                    'inno' { '.inf' }
+                    { $_ -in @('wix', 'burn') } { '.txt' }
+                    default { $null }
+                }
+
+                if (-not $ext) {
+                    $typeMsg = if ($type) { $type } else { 'unknown' }
+                    Write-Red "Saving config is not supported for installer type: $typeMsg"
+                    return
+                }
+
+                $targetFile = Join-Path $PSScriptRoot "Prefs/$Id$ext"
+                $targetDir = Split-Path -Path $targetFile -Parent
+                if ($targetDir -and -not (Test-Path $targetDir)) {
+                    $null = New-Item -ItemType Directory -Path $targetDir -Force
+                }
+
+                switch ($type) {
+                    'inno' {
+                        $cliArgs += @('--custom', "/SAVEINF=`"$targetFile`"")
+                    }
+                    { $_ -in @('wix', 'burn') } {
+                        $logDir = Join-Path $env:TEMP 'Logs'
+                        if (-not (Test-Path $logDir)) {
+                            $null = New-Item -ItemType Directory -Path $logDir -Force
+                        }
+                        $cliArgs += @('--custom', "/log `"$logDir\$Id.log`"")
+                    }
+                }
+            }
+            else {
+                $cliArgs += @('--disable-interactivity')
+
+                # Implicit preference loading based on convention (Prefs/$Id.inf or Prefs/$Id.txt)
+                $autoInf = Join-Path $PSScriptRoot "Prefs/$Id.inf"
+                $autoTxt = Join-Path $PSScriptRoot "Prefs/$Id.txt"
+
+                if (Test-Path $autoInf) {
+                    $cliArgs += @('--custom', "/LOADINF=`"$autoInf`"")
+                }
+                elseif (Test-Path $autoTxt) {
+                    $content = (Get-Content -Path $autoTxt) -join ' '
+                    $cliArgs += @('--custom', [System.Environment]::ExpandEnvironmentVariables($content))
+                }
+            }
+
+            # 5. Dispatch execution
+            if ($installed -and $SavePrefs) {
+                $cliArgs += @('--force')
+            }
+
+            $action = if ($installed -and (-not $SavePrefs)) { 'upgrade' } else { 'install' }
+
+            if ($action -eq 'upgrade') {
+                Write-Green "^ winget/$Id"
+            }
+            else {
+                Write-Green "+ winget/$Id"
+            }
+            Write-Muted "$([char]0x203A) winget $action $($cliArgs -join ' ')"
+            & winget $action @cliArgs | Out-Host
+        }
+    }
+}
+#endregion
 
 Export-ModuleMember -Function Test-WinGetPackageInstalled, Install-WinGetPackage

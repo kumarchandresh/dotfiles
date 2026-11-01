@@ -9,9 +9,7 @@ function Get-WslDistro {
         return @()
     }
 
-    return @(wsl --list --quiet 2>$null) -replace "`0", '' |
-        Where-Object { $_ -match '\S' } |
-        ForEach-Object { $_.Trim() }
+    return @(wsl --list --quiet 2>$null) -replace "`0", '' | Where-Object { $_ -match '\S' } | ForEach-Object { $_.Trim() }
 }
 
 function Install-WslDistro {
@@ -30,7 +28,7 @@ function Install-WslDistro {
             if ($distroName -notin $distros) {
                 Write-Green "+ WSL/$distroName"
                 Write-Muted "$([char]0x203A) wsl --install $distroName --no-launch"
-                wsl --install $distroName --no-launch
+                wsl --install $distroName --no-launch | Out-Host
             }
             else {
                 Write-Muted "~ WSL/$distroName"
@@ -44,7 +42,7 @@ function Update-Wsl {
     param ()
 
     Write-Muted "$([char]0x203A) wsl --update"
-    wsl --update
+    wsl --update | Out-Host
 }
 
 Export-ModuleMember -Function Get-WslDistro, Install-WslDistro, Update-Wsl
