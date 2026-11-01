@@ -204,6 +204,7 @@ $ScoopBuckets | Install-ScoopBucket
 Write-Title ':: Install user packages'
 
 @(
+    'Google.AntigravityIDE'
     'Microsoft.VisualStudioCode'
 ) | Install-WinGetPackage
 
