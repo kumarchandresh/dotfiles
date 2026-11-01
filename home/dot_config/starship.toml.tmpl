@@ -1,7 +1,17 @@
 {{- $base := output "starship" "preset" "pure-preset" | fromToml -}}
 {{- $user := fromToml `
 
-[package]
-disabled = true
+continuation_prompt = "[… ](#6c6c6c)"
+
+[directory]
+truncation_length = 0
+truncate_to_repo = false
+
+[git_status]
+ahead = "⇡"
+behind = "⇣"
+diverged = "⇣⇡"
+format = "[[(*$staged)](green)[(*$conflicted$untracked$modified$renamed$deleted)](218) ($ahead_behind$stashed)]($style)"
+
 ` -}}
 {{- mergeOverwrite $base $user | toToml -}}
