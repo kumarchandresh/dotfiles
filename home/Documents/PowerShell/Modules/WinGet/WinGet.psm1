@@ -69,10 +69,10 @@ if ($PSEdition -eq 'Core') {
             # 2. Resolve installer type if needed
             $type = $InstallerType
             if (-not $type) {
-                if (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.inf")) {
+                if ((Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.override.inf")) -or (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.custom.inf"))) {
                     $type = 'inno'
                 }
-                elseif (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.txt")) {
+                elseif ((Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.override.txt")) -or (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.custom.txt"))) {
                     $type = 'wix'
                 }
             }
@@ -125,7 +125,7 @@ if ($PSEdition -eq 'Core') {
                     return
                 }
 
-                $targetFile = Join-Path $PSScriptRoot "Prefs/$Id$ext"
+                $targetFile = Join-Path $PSScriptRoot "Prefs/$Id.custom$ext"
                 $targetDir = Split-Path -Path $targetFile -Parent
                 if ($targetDir -and -not (Test-Path $targetDir)) {
                     $null = New-Item -ItemType Directory -Path $targetDir -Force
@@ -147,16 +147,45 @@ if ($PSEdition -eq 'Core') {
                 }
             }
             else {
-                # Implicit preference loading based on convention (Prefs/$Id.inf or Prefs/$Id.txt)
-                $autoInf = Join-Path $PSScriptRoot "Prefs/$Id.inf"
-                $autoTxt = Join-Path $PSScriptRoot "Prefs/$Id.txt"
+                # Implicit preference loading based on convention
+                $prefFile = $null
+                $prefMode = $null
+                $prefKind = $null
 
-                if (Test-Path $autoInf) {
-                    $cmdletParams['Custom'] = "/LOADINF=`"$autoInf`""
+                $overrideInf = Join-Path $PSScriptRoot "Prefs/$Id.override.inf"
+                $overrideTxt = Join-Path $PSScriptRoot "Prefs/$Id.override.txt"
+                $customInf = Join-Path $PSScriptRoot "Prefs/$Id.custom.inf"
+                $customTxt = Join-Path $PSScriptRoot "Prefs/$Id.custom.txt"
+
+                if (Test-Path $overrideInf) {
+                    $prefFile = $overrideInf
+                    $prefMode = 'Override'
+                    $prefKind = 'inf'
                 }
-                elseif (Test-Path $autoTxt) {
-                    $content = (Get-Content -Path $autoTxt) -join ' '
-                    $cmdletParams['Custom'] = [System.Environment]::ExpandEnvironmentVariables($content)
+                elseif (Test-Path $overrideTxt) {
+                    $prefFile = $overrideTxt
+                    $prefMode = 'Override'
+                    $prefKind = 'txt'
+                }
+                elseif (Test-Path $customInf) {
+                    $prefFile = $customInf
+                    $prefMode = 'Custom'
+                    $prefKind = 'inf'
+                }
+                elseif (Test-Path $customTxt) {
+                    $prefFile = $customTxt
+                    $prefMode = 'Custom'
+                    $prefKind = 'txt'
+                }
+
+                if ($prefFile) {
+                    if ($prefKind -eq 'inf') {
+                        $cmdletParams[$prefMode] = "/LOADINF=`"$prefFile`""
+                    }
+                    else {
+                        $content = (Get-Content -Path $prefFile) -join ' '
+                        $cmdletParams[$prefMode] = [System.Environment]::ExpandEnvironmentVariables($content)
+                    }
                 }
             }
 
@@ -274,10 +303,10 @@ else {
             # 2. Resolve installer type if needed
             $type = $InstallerType
             if (-not $type) {
-                if (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.inf")) {
+                if ((Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.override.inf")) -or (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.custom.inf"))) {
                     $type = 'inno'
                 }
-                elseif (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.txt")) {
+                elseif ((Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.override.txt")) -or (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.custom.txt"))) {
                     $type = 'wix'
                 }
             }
@@ -327,7 +356,7 @@ else {
                     return
                 }
 
-                $targetFile = Join-Path $PSScriptRoot "Prefs/$Id$ext"
+                $targetFile = Join-Path $PSScriptRoot "Prefs/$Id.custom$ext"
                 $targetDir = Split-Path -Path $targetFile -Parent
                 if ($targetDir -and -not (Test-Path $targetDir)) {
                     $null = New-Item -ItemType Directory -Path $targetDir -Force
@@ -349,16 +378,46 @@ else {
             else {
                 $cliArgs += @('--disable-interactivity')
 
-                # Implicit preference loading based on convention (Prefs/$Id.inf or Prefs/$Id.txt)
-                $autoInf = Join-Path $PSScriptRoot "Prefs/$Id.inf"
-                $autoTxt = Join-Path $PSScriptRoot "Prefs/$Id.txt"
+                # Implicit preference loading based on convention
+                $prefFile = $null
+                $prefMode = $null
+                $prefKind = $null
 
-                if (Test-Path $autoInf) {
-                    $cliArgs += @('--custom', "/LOADINF=`"$autoInf`"")
+                $overrideInf = Join-Path $PSScriptRoot "Prefs/$Id.override.inf"
+                $overrideTxt = Join-Path $PSScriptRoot "Prefs/$Id.override.txt"
+                $customInf = Join-Path $PSScriptRoot "Prefs/$Id.custom.inf"
+                $customTxt = Join-Path $PSScriptRoot "Prefs/$Id.custom.txt"
+
+                if (Test-Path $overrideInf) {
+                    $prefFile = $overrideInf
+                    $prefMode = 'Override'
+                    $prefKind = 'inf'
                 }
-                elseif (Test-Path $autoTxt) {
-                    $content = (Get-Content -Path $autoTxt) -join ' '
-                    $cliArgs += @('--custom', [System.Environment]::ExpandEnvironmentVariables($content))
+                elseif (Test-Path $overrideTxt) {
+                    $prefFile = $overrideTxt
+                    $prefMode = 'Override'
+                    $prefKind = 'txt'
+                }
+                elseif (Test-Path $customInf) {
+                    $prefFile = $customInf
+                    $prefMode = 'Custom'
+                    $prefKind = 'inf'
+                }
+                elseif (Test-Path $customTxt) {
+                    $prefFile = $customTxt
+                    $prefMode = 'Custom'
+                    $prefKind = 'txt'
+                }
+
+                if ($prefFile) {
+                    $flag = if ($prefMode -eq 'Override') { '--override' } else { '--custom' }
+                    if ($prefKind -eq 'inf') {
+                        $cliArgs += @($flag, "/LOADINF=`"$prefFile`"")
+                    }
+                    else {
+                        $content = (Get-Content -Path $prefFile) -join ' '
+                        $cliArgs += @($flag, [System.Environment]::ExpandEnvironmentVariables($content))
+                    }
                 }
             }
 
