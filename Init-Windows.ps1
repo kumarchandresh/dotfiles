@@ -36,15 +36,15 @@ if ($PSEdition -ne 'Core') {
             Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
         }
         else {
-            scoop update
+            scoop update | Out-Host
         }
 
         if ((scoop config scoop_branch) -ne 'develop') {
-            scoop config scoop_branch develop
+            $null = scoop config scoop_branch develop
         }
 
         if ((scoop config aria2-warning-enabled) -ne $false) {
-            scoop config aria2-warning-enabled false
+            $null = scoop config aria2-warning-enabled false
         }
 
         @(
@@ -114,6 +114,7 @@ if ($PSEdition -ne 'Core') {
             'Microsoft.VCRedist.2015+.x86'
             'Git.Git'
             [PSCustomObject]@{ Id = 'Microsoft.PowerShell'; InstallerType = 'wix' }
+            'Microsoft.VisualStudio.BuildTools'
         ) | Install-WinGetPackage -Global
 
         $pendingReboot = $false
