@@ -1,2 +1,4 @@
 [Setup]
 Components=ext,ext\shellhere,gitlfs,scalar
+SSHOption=ExternalOpenSSH
+CURLOption=WinSSL

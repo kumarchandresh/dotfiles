@@ -45,7 +45,7 @@ if ($PSEdition -eq 'Core') {
             [switch]$Global,
 
             [Parameter(ValueFromPipelineByPropertyName)]
-            [switch]$SavePrefs
+            [switch]$SaveInstallerOptions
         )
 
         process {
@@ -61,7 +61,7 @@ if ($PSEdition -eq 'Core') {
             }
             $installed = Get-WinGetPackage @getPackageParams
 
-            if ($installed -and (-not $SavePrefs) -and (-not $installed.IsUpdateAvailable)) {
+            if ($installed -and (-not $SaveInstallerOptions) -and (-not $installed.IsUpdateAvailable)) {
                 Write-Muted "~ winget/$Id"
                 return
             }
@@ -69,15 +69,15 @@ if ($PSEdition -eq 'Core') {
             # 2. Resolve installer type if needed
             $type = $InstallerType
             if (-not $type) {
-                if ((Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.override.inf")) -or (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.custom.inf"))) {
+                if ((Test-Path (Join-Path $PSScriptRoot "InstallerOptions/$Id.override.inf")) -or (Test-Path (Join-Path $PSScriptRoot "InstallerOptions/$Id.custom.inf"))) {
                     $type = 'inno'
                 }
-                elseif ((Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.override.txt")) -or (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.custom.txt"))) {
+                elseif ((Test-Path (Join-Path $PSScriptRoot "InstallerOptions/$Id.override.txt")) -or (Test-Path (Join-Path $PSScriptRoot "InstallerOptions/$Id.custom.txt"))) {
                     $type = 'wix'
                 }
             }
 
-            if (-not $type -and $SavePrefs) {
+            if (-not $type -and $SaveInstallerOptions) {
                 $cliScope = if ($Global) { 'machine' } else { 'user' }
                 $cliArgs = @('--exact', '--id', $Id, '--scope', $cliScope, '--accept-source-agreements', '--disable-interactivity')
                 if (-not [string]::IsNullOrEmpty($Source)) {
@@ -111,8 +111,8 @@ if ($PSEdition -eq 'Core') {
                 $cmdletParams['InstallerType'] = $InstallerType
             }
 
-            # 4. Handle -SavePrefs (Authoring Mode) or Implicit Prefs
-            if ($SavePrefs) {
+            # 4. Handle -SaveInstallerOptions (Authoring Mode) or Implicit InstallerOptions
+            if ($SaveInstallerOptions) {
                 $ext = switch ($type) {
                     'inno' { '.inf' }
                     { $_ -in @('wix', 'burn') } { '.txt' }
@@ -125,7 +125,7 @@ if ($PSEdition -eq 'Core') {
                     return
                 }
 
-                $targetFile = Join-Path $PSScriptRoot "Prefs/$Id.custom$ext"
+                $targetFile = Join-Path $PSScriptRoot "InstallerOptions/$Id.custom$ext"
                 $targetDir = Split-Path -Path $targetFile -Parent
                 if ($targetDir -and -not (Test-Path $targetDir)) {
                     $null = New-Item -ItemType Directory -Path $targetDir -Force
@@ -152,10 +152,10 @@ if ($PSEdition -eq 'Core') {
                 $prefMode = $null
                 $prefKind = $null
 
-                $overrideInf = Join-Path $PSScriptRoot "Prefs/$Id.override.inf"
-                $overrideTxt = Join-Path $PSScriptRoot "Prefs/$Id.override.txt"
-                $customInf = Join-Path $PSScriptRoot "Prefs/$Id.custom.inf"
-                $customTxt = Join-Path $PSScriptRoot "Prefs/$Id.custom.txt"
+                $overrideInf = Join-Path $PSScriptRoot "InstallerOptions/$Id.override.inf"
+                $overrideTxt = Join-Path $PSScriptRoot "InstallerOptions/$Id.override.txt"
+                $customInf = Join-Path $PSScriptRoot "InstallerOptions/$Id.custom.inf"
+                $customTxt = Join-Path $PSScriptRoot "InstallerOptions/$Id.custom.txt"
 
                 if (Test-Path $overrideInf) {
                     $prefFile = $overrideInf
@@ -190,7 +190,7 @@ if ($PSEdition -eq 'Core') {
             }
 
             # 5. Dispatch execution
-            if ($installed -and $SavePrefs) {
+            if ($installed -and $SaveInstallerOptions) {
                 $cmdletParams['Force'] = $true
             }
 
@@ -205,7 +205,7 @@ if ($PSEdition -eq 'Core') {
                         "-$($_.Key) $($_.Value)"
                     }
                 }) -join ' '
-            $action = if ($installed -and (-not $SavePrefs)) { 'Update' } else { 'Install' }
+            $action = if ($installed -and (-not $SaveInstallerOptions)) { 'Update' } else { 'Install' }
 
             if ($action -eq 'Update') {
                 Write-Green "^ winget/$Id"
@@ -280,7 +280,7 @@ else {
             [switch]$Global,
 
             [Parameter(ValueFromPipelineByPropertyName)]
-            [switch]$SavePrefs
+            [switch]$SaveInstallerOptions
         )
 
         process {
@@ -295,7 +295,7 @@ else {
             $installed = Test-WinGetPackageInstalled @package
             $updateAvailable = if ($installed) { Test-WinGetPackageUpdateAvailable @package } else { $false }
 
-            if ($installed -and (-not $SavePrefs) -and (-not $updateAvailable)) {
+            if ($installed -and (-not $SaveInstallerOptions) -and (-not $updateAvailable)) {
                 Write-Muted "~ winget/$Id"
                 return
             }
@@ -303,16 +303,16 @@ else {
             # 2. Resolve installer type if needed
             $type = $InstallerType
             if (-not $type) {
-                if ((Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.override.inf")) -or (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.custom.inf"))) {
+                if ((Test-Path (Join-Path $PSScriptRoot "InstallerOptions/$Id.override.inf")) -or (Test-Path (Join-Path $PSScriptRoot "InstallerOptions/$Id.custom.inf"))) {
                     $type = 'inno'
                 }
-                elseif ((Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.override.txt")) -or (Test-Path (Join-Path $PSScriptRoot "Prefs/$Id.custom.txt"))) {
+                elseif ((Test-Path (Join-Path $PSScriptRoot "InstallerOptions/$Id.override.txt")) -or (Test-Path (Join-Path $PSScriptRoot "InstallerOptions/$Id.custom.txt"))) {
                     $type = 'wix'
                 }
             }
 
-            # Query show info if installer type is needed for prefs
-            if (-not $type -and $SavePrefs) {
+            # Query show info if installer type is needed for InstallerOptions
+            if (-not $type -and $SaveInstallerOptions) {
                 $cliShowArgs = @('--exact', '--id', $Id, '--scope', $scope, '--accept-source-agreements', '--disable-interactivity')
                 if (-not [string]::IsNullOrEmpty($Source)) {
                     $cliShowArgs += @('--source', $Source)
@@ -340,8 +340,8 @@ else {
                 $cliArgs += @('--installer-type', $InstallerType)
             }
 
-            # 4. Handle -SavePrefs or Implicit Prefs
-            if ($SavePrefs) {
+            # 4. Handle -SaveInstallerOptions or Implicit InstallerOptions
+            if ($SaveInstallerOptions) {
                 $cliArgs += @('--interactive')
 
                 $ext = switch ($type) {
@@ -356,7 +356,7 @@ else {
                     return
                 }
 
-                $targetFile = Join-Path $PSScriptRoot "Prefs/$Id.custom$ext"
+                $targetFile = Join-Path $PSScriptRoot "InstallerOptions/$Id.custom$ext"
                 $targetDir = Split-Path -Path $targetFile -Parent
                 if ($targetDir -and -not (Test-Path $targetDir)) {
                     $null = New-Item -ItemType Directory -Path $targetDir -Force
@@ -383,10 +383,10 @@ else {
                 $prefMode = $null
                 $prefKind = $null
 
-                $overrideInf = Join-Path $PSScriptRoot "Prefs/$Id.override.inf"
-                $overrideTxt = Join-Path $PSScriptRoot "Prefs/$Id.override.txt"
-                $customInf = Join-Path $PSScriptRoot "Prefs/$Id.custom.inf"
-                $customTxt = Join-Path $PSScriptRoot "Prefs/$Id.custom.txt"
+                $overrideInf = Join-Path $PSScriptRoot "InstallerOptions/$Id.override.inf"
+                $overrideTxt = Join-Path $PSScriptRoot "InstallerOptions/$Id.override.txt"
+                $customInf = Join-Path $PSScriptRoot "InstallerOptions/$Id.custom.inf"
+                $customTxt = Join-Path $PSScriptRoot "InstallerOptions/$Id.custom.txt"
 
                 if (Test-Path $overrideInf) {
                     $prefFile = $overrideInf
@@ -422,11 +422,11 @@ else {
             }
 
             # 5. Dispatch execution
-            if ($installed -and $SavePrefs) {
+            if ($installed -and $SaveInstallerOptions) {
                 $cliArgs += @('--force')
             }
 
-            $action = if ($installed -and (-not $SavePrefs)) { 'upgrade' } else { 'install' }
+            $action = if ($installed -and (-not $SaveInstallerOptions)) { 'upgrade' } else { 'install' }
 
             if ($action -eq 'upgrade') {
                 Write-Green "^ winget/$Id"

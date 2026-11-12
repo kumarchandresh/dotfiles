@@ -233,11 +233,11 @@ if (Test-ScoopBucketInstalled private) {
     ) | Install-ScoopPackage
 }
 
-#region 6 WSL distros
+#region 6 WSL distro
 # ---------------------------------------------------------------------------
-# Install WSL Distros
+# Install WSL Distro
 # ---------------------------------------------------------------------------
-Write-Title ':: Install WSL Distros'
+Write-Title ':: Install WSL Distro'
 
 if (Test-WslAvailable) {
     @(
