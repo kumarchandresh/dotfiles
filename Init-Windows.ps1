@@ -205,6 +205,8 @@ $ScoopBuckets | Install-ScoopBucket
 Write-Title ':: Install user packages'
 
 @(
+    'Google.Antigravity'
+    'Google.AntigravityCLI'
     'Google.AntigravityIDE'
     'Microsoft.VisualStudioCode'
     'LocalSend.LocalSend'
