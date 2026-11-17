@@ -211,6 +211,7 @@ Write-Title ':: Install user packages'
     'Microsoft.VisualStudioCode'
     'LocalSend.LocalSend'
     'Obsidian.Obsidian'
+    'dotPDN.PaintDotNet'
 ) | Install-WinGetPackage
 
 @(
