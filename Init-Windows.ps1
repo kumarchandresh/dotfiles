@@ -207,6 +207,7 @@ Write-Title ':: Install user packages'
 @(
     'Google.AntigravityIDE'
     'Microsoft.VisualStudioCode'
+    'Obsidian.Obsidian'
 ) | Install-WinGetPackage
 
 @(
