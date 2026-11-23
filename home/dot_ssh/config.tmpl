@@ -3,3 +3,9 @@ Host github.com
     User git
     IdentityFile {{ .chezmoi.homeDir }}/.ssh/github
     IdentitiesOnly yes
+
+Host codeberg.org
+    HostName codeberg.org
+    User git
+    IdentityFile {{ .chezmoi.homeDir }}/.ssh/codeberg
+    IdentitiesOnly yes
