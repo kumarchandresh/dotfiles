@@ -54,6 +54,7 @@ if ($PSEdition -ne 'Core') {
             'main/lessmsi'
             'main/dark'
             'main/winget-ps'
+            'main/pwsh'
             'main/gsudo'
             'main/chezmoi'
             'main/bitwarden-cli'
@@ -113,7 +114,6 @@ if ($PSEdition -ne 'Core') {
             'Microsoft.VCRedist.2015+.x64'
             'Microsoft.VCRedist.2015+.x86'
             'Git.Git'
-            [PSCustomObject]@{ Id = 'Microsoft.PowerShell'; InstallerType = 'wix' }
             'Microsoft.VisualStudio.BuildTools'
         ) | Install-WinGetPackage -Global
 
