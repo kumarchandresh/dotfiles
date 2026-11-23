@@ -234,7 +234,7 @@ Write-Title ':: Install user packages'
 
 if (Test-ScoopBucketInstalled private) {
     @(
-        'private/MonoLisa'
+        'private/MonoLisaCode'
     ) | Install-ScoopPackage
 }
 
